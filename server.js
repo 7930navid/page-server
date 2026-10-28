@@ -230,37 +230,38 @@ app.get('/search', async (req, res) => {
 app.post('/follow', async (req, res) => {
     try {
         const { follower, followed } = req.body; 
-        // follower = যে ফলো করছে তার ইমেইল
-        // followed = যাকে ফলো করা হচ্ছে তার ইমেইল
+        // follower = যে ফলো করছে তার ইমেইল (যেমন: "myemail@gmail.com")
+        // followed = যাকে ফলো করা হচ্ছে তার আইডি (যেমন: 5 বা "user_uuid")
 
-        // ১. নিজের ইমেইল নিজেকে ফলো করছে কিনা চেক
-        if (follower === followed) {
-            return res.status(400).json({ success: false, message: 'You cannot follow yourself!' });
-        }
-
-        // ২. যাকে ফলো করা হচ্ছে তার বর্তমান followers লিস্ট আনা
-        const userCheck = await pool.query('SELECT followers FROM users WHERE email = $1', [followed]);
+        // ১. যাকে ফলো করা হচ্ছে তাকে ডেটাবেজ থেকে খুঁজে তার ইমেইল ও বর্তমান ফলোয়ার্স আনা
+        const userCheck = await pool.query('SELECT email, followers FROM users WHERE id = $1', [followed]);
         
         if (userCheck.rows.length === 0) {
             return res.status(404).json({ success: false, message: 'User not found' });
         }
 
-        const currentFollowers = userCheck.rows[0].followers || [];
+        const targetUser = userCheck.rows[0];
+
+        // ২. সেলফ-ফলো চেক (টার্গেট ইউজারের ইমেইল আর ফলোয়ারের ইমেইল এক কিনা)
+        if (targetUser.email === follower) {
+            return res.status(400).json({ success: false, message: 'You cannot follow yourself!' });
+        }
+
+        const currentFollowers = targetUser.followers || [];
 
         // ৩. ইতিমধ্যে ফলো করা আছে কিনা চেক
         if (currentFollowers.includes(follower)) {
             return res.status(400).json({ success: false, message: 'Already following this user!' });
         }
 
-        // ৪. followers jsonb কলামে নতুন ইমেইল push করা
+        // ৪. followers jsonb কলামে নতুন ফলোয়ারের ইমেইল push করা
         const query = `
             UPDATE users 
             SET followers = COALESCE(followers, '[]'::jsonb) || $1::jsonb 
-            WHERE email = $2 
-            RETURNING email, followers;
+            WHERE id = $2 
+            RETURNING id, email, followers;
         `;
         
-        // ইমেইলটি অ্যারে হিসেবে JSON.stringify করে পাঠানো হচ্ছে
         const values = [JSON.stringify([follower]), followed];
         const result = await pool.query(query, values);
 
@@ -282,7 +283,7 @@ app.delete('/unfollow', async (req, res) => {
     try {
         const { follower, followed } = req.body; 
         // follower = যে আনফলো করছে তার ইমেইল
-        // followed = যার প্রোফাইল থেকে আনফলো করা হচ্ছে
+        // followed = যার প্রোফাইল থেকে আনফলো করা হচ্ছে তার আইডি
 
         const query = `
             UPDATE users 
@@ -291,8 +292,8 @@ app.delete('/unfollow', async (req, res) => {
                 FROM jsonb_array_elements_text(followers) elem 
                 WHERE elem != $1
             ) 
-            WHERE email = $2 
-            RETURNING email, followers;
+            WHERE id = $2 
+            RETURNING id, email, followers;
         `;
         
         const values = [follower, followed];
@@ -313,6 +314,8 @@ app.delete('/unfollow', async (req, res) => {
         res.status(500).json({ success: false, error: 'Server error' });
     }
 });
+
+
 
 /* =========================================================
    START SERVER
