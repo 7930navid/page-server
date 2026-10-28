@@ -317,6 +317,44 @@ app.delete('/unfollow', async (req, res) => {
 
 
 
+app.get('/user-by-email', async (req, res) => {
+  try {
+    const { email } = req.query;
+
+    if (!email || email.trim() === '') {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Search query "email" is required' 
+      });
+    }
+
+    // users টেবিল থেকে ঐ ইমেইলের সব কলাম ও রো ফেচ করবে
+    const query = `
+      SELECT * 
+      FROM users 
+      WHERE email = $1;
+    `;
+
+    const result = await pool.query(query, [email.trim()]);
+
+    res.status(200).json({
+      success: true,
+      count: result.rows.length,
+      data: result.rows // মিল থাকা সব রো ফ্রন্টএন্ডে যাবে
+    });
+
+  } catch (err) {
+    console.error('Fetch Error:', err.message);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Internal Server Error' 
+    });
+  }
+});
+
+
+
+
 /* =========================================================
    START SERVER
 ========================================================= */
