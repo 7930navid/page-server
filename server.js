@@ -225,6 +225,92 @@ app.get('/search', async (req, res) => {
   }
 });
 
+app.delete('/unfollow', async (req, res) => {
+    try {
+        const { userId, followerIdToRemove } = req.body;
+
+        const query = `
+            UPDATE users
+            SET followers = (
+                SELECT COALESCE(jsonb_agg(elem), '[]'::jsonb)
+                FROM jsonb_array_elements(followers) elem
+                WHERE elem->>'id' != $1::text
+            )
+            WHERE id = $2
+            RETURNING id, followers;
+        `;
+        const values = [followerIdToRemove, userId];
+        const result = await pool.query(query, values);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
+
+        res.status(200).json({ success: true, followers: result.rows[0].followers });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+
+app.post('/follow', async (req, res) => {
+    try {
+        const { userId, follower } = req.body;
+
+
+        if (userId == follower.id) {
+            return res.status(400).json({
+                success: false,
+                message: 'You cannot follow yourself!'
+            });
+        }
+
+
+        const userCheckQuery = `SELECT id, followers FROM users WHERE id = $1`;
+        const userResult = await pool.query(userCheckQuery, [userId]);
+
+        if (userResult.rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'User not found'
+            });
+        }
+
+        const currentFollowers = userResult.rows[0].followers || [];
+
+
+        const isAlreadyFollowing = currentFollowers.some(f => f.id == follower.id);
+        if (isAlreadyFollowing) {
+            return res.status(400).json({
+                success: false,
+                message: 'You are already following this user!'
+            });
+        }
+
+
+        const updateQuery = `
+            UPDATE users
+            SET followers = COALESCE(followers, '[]'::jsonb) || $1::jsonb
+            WHERE id = $2
+            RETURNING id, followers;
+        `;
+
+
+        const values = [JSON.stringify([follower]), userId];
+        const result = await pool.query(updateQuery, values);
+
+        res.status(200).json({
+            success: true,
+            message: 'Successfully followed!',
+            followers: result.rows[0].followers
+        });
+
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 /* =========================================================
    START SERVER
 ========================================================= */
