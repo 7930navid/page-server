@@ -25,7 +25,7 @@ const pool = new Pool({
 const initDB = async () => {
   const createTableQuery = `
     CREATE TABLE IF NOT EXISTS users (
-      id SERIAL PRIMARY KEY,
+      id VARCHAR(100) UNIQUE NOT NULL,
       username VARCHAR(100) NOT NULL,
       email VARCHAR(150) NOT NULL,
       password VARCHAR(255) NOT NULL,
@@ -64,19 +64,20 @@ app.get('/ping', (req, res) => {
 ========================================================= */
 app.post('/signup', async (req, res) => {
   try {
-    const { username, email, password, websites, avatar, cover_photo, type } = req.body;
+    const { username, email, password, websites, avatar, cover_photo, type, id } = req.body;
 
     if (!username || !email || !password) {
       return res.status(400).json({ message: 'Username, email, and password are required' });
     }
 
     const insertQuery = `
-      INSERT INTO users (username, email, password, websites, avatar, cover_photo, type)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      INSERT INTO users (id, username, email, password, websites, avatar, cover_photo, type)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       RETURNING id, username, email, websites, avatar, cover_photo, type, created_at;
     `;
 
     const values = [
+					id,
       username,
       email,
       password,
