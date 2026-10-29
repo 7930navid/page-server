@@ -355,6 +355,36 @@ app.get('/user-by-email', async (req, res) => {
 
 
 
+// Page-Server Route
+app.get('/get-followers/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const query = `SELECT followers FROM users WHERE id = $1;`;
+        const result = await pool.query(query, [id]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
+
+
+        let followers = result.rows[0].followers || [];
+        if (typeof followers === 'string') {
+            followers = JSON.parse(followers);
+        }
+
+        res.status(200).json({
+            success: true,
+            followers: followers
+        });
+
+    } catch (err) {
+        console.error('Error fetching followers:', err.message);
+        res.status(500).json({ success: false, message: 'Internal Server Error' });
+    }
+});
+
+
 /* =========================================================
    START SERVER
 ========================================================= */
